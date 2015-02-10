@@ -1,0 +1,23 @@
+{
+  "name": "orc",
+  "version": "1.0.0",
+  "description": "overlook research command line interface to change manager",
+  "main": "orc.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "jshint orc *.js"
+  },
+  "keywords": [
+    "git",
+    "cli"
+  ],
+  "dependencies": {
+    "commander": "~2.6.0",
+    "gitty": "*",
+    "jest": "~0.1.37",
+    "jshint": "~2.6.0",
+    "tmp": "*"
+  },
+  "author": "Aaron Brady",
+  "license": "(c) Overlook Research 2014"
+}

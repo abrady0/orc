@@ -12,7 +12,12 @@ describe('no repo', function() {
   it('should fail in a directory without git', function() {
     tmp.dir(function(err, dir) {
       expect(err).to.be.null();
-      expect(orc.main(dir, [])).to.be.false();
+      expect(function() {
+        orc.main(dir, [], function(err, res) {
+          expect(err).not.to.be.null();
+          expect(res).to.be.undefined();
+        });
+      }).to.throw();
     });
   });
 });
@@ -27,51 +32,91 @@ describe('basic repo', function() {
     repo.addSync([fn]);
     repo.commitSync('foo');
 
-    it('should start up properly in a new github repo', function() {
-      expect(orc.main(dir, ['node', 'orc'])).to.be.true();
+    it('should start up properly in a new github repo', function(done) {
+      orc.main(dir, ['node', 'orc'], function(err, res) {
+        expect(err).to.be.null();
+        expect(res).to.be.true();
+        done();
+      });
     });
   });
 });
 
 describe('remote tests', function() {
+  var gitserver;
   var repo;
-  var repo_dir;
-  var server_dir;
+  var repo2;
+  var repoDir;
+  var rootDir;
+  var repoName = 'orctest';
+  var branchName = 'foobranch';
 
   // create a simple git server listener
   before(function(done) {
     tmp.dir(function(err, dir) {
-      server_dir = dir;
-      repo_dir = path.resolve(dir,'orctest1');
-      fs.mkdirSync(repo_dir);
+      rootDir = dir;
+      repoDir = path.resolve(dir,repoName);
+      fs.mkdirSync(repoDir);
 
-      repo = git(repo_dir);
+      repo = git(repoDir);
       repo.initSync();
-      repo.addRemoteSync('local', 'http://localhost:7001/server');
-      var repos = pushover(dir);
-      repos.on('push', function(push) {
+      repo.addRemoteSync('origin', 'http://localhost:7001/server');
+      var gitserver = pushover(dir);
+      gitserver.on('push', function(push) {
         push.accept();
       });
+      gitserver.on('fetch', function (fetch) {
+        fetch.accept();
+      });
       require('http').createServer(function(req, res) {
-        repos.handle(req, res);
+        gitserver.handle(req, res);
       }).listen(7001, function() {
         done();
       });    
     });
   });
-  it('should push to the remote', function(done) {
-    console.log('server dir: '+server_dir);
-    repo.push('local', 'master', function(err, result) {
-      var fn = path.resolve(repo_dir,'foo.js');
-      fs.writeFileSync(fn, 'o hai');
-      repo.addSync([fn]);
-      repo.commitSync('bar');
-      expect(fs.existsSync(path.resolve(server_dir,'server.git'))).to.be.true();
+  // this is expected to have been done outside of orc
+  it('should create the master branch and push it', function(done) {
+    var fn = path.resolve(repoDir,'foo.js');
+    fs.writeFileSync(fn, 'o hai');
+    repo.addSync([fn]);
+    repo.commitSync('bar');
+    repo.push('origin', 'master', function(err, result) {
+      expect(fs.existsSync(path.resolve(rootDir,'server.git'))).to.be.true();
       done();
     });
   });
-  it('should create a branch based off of the latest commit on master', function() {
-    
+  it('should create a branch based off of the latest commit on master', function(done) {
+    orc.main(repoDir,['node','orc','branch',branchName], function(err, res) {
+      expect(repo.getBranchesSync().current).to.equal(branchName);
+      done();
+    });
+  });
+  it('should have pushed the branch so it is visible to others', function(done) {
+    tmp.dir(function(err, dir) {
+      expect(err).to.be.null();
+      //console.log('root dir: '+rootDir);
+      //console.log('repo2 root: '+dir);
+      var repo2_dir = path.resolve(dir,dir);
+      git.clone(repo2_dir, 'http://localhost:7001/server', function(err) {
+        expect(err).to.be.null();
+        repo2 = git(repo2_dir);
+        repo2.pull('origin','master',['-a'], function(err, res) {
+          var co_res = repo2.checkoutSync(branchName);
+          expect(co_res).to.be.ok();
+          done();
+        });
+      });
+    });
+  });
+  it('should checkpoint properly', function() {
+    var fn = path.resolve(repoDir,'bar.js');
+    fs.writeFileSync(fn, 'o hai');
+    expect(function() { 
+      orc.main(repoDir, ['node','orc','checkpoint'], function(err, cb) {
+        expect(0).to.be.ok(); // shouldn't ever get here
+      });
+    }).to.throw();
   });
 });
 /*

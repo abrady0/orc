@@ -1,4 +1,4 @@
-var app = require('commander');
+var commander = require('commander');
 var git = require('gitty');
 var path = require('path');
 var pushover   = require('pushover');
@@ -8,47 +8,134 @@ process.on('SIGINT', function () {
   process.exit(0);
 });
 
-function _setup(dir) {
+function init(dir, cb) {
   // TODO: march up to root dir just to make output consistent
   var repo = git(dir);
-  try {
-    branches = repo.getBranchesSync();
-    if (!branches.current) {
-      throw new Error('error: '+repo.name+' doesn\'t appear to be a valid git repo');
+  repo.getBranches(function(err, branches) {
+    if(err) {
+      cb('error getting branches '+err);
+      return;
     }
-  } catch (e) {
-    console.error('error: problem getting info about repo '+repo.name+' '+e.message);
-    return false;
-  }
-  return { repo_dir: dir, repo: git(dir)};
+    if (!branches.current) {
+      cb('error: '+repo.name+' doesn\'t appear to be a valid git repo');
+      return;
+    }
+    cb(null, { repo_dir: dir, repo: git(dir)});
+  });
 }
 
-function _requireCommit(orc) {
-  if(orc.repo.statusSync().unstages.length > 0) {
-    throw new Error('unstaged files, commit before running this.');
-  }
+function noUnstaged(orc, cb) {
+  orc.repo.status(function(err, status) {
+    if(err) {
+      cb('error getting status checking unstaged '+err);
+      return;
+    }
+    if(status.unstaged.length > 0) {
+      cb('unstaged files, commit before running this.');
+      return;
+    }
+    cb(null, true);
+  });
 }
 
-function checkpoint(orc) {
-  // commits local changes and pushes them without unit tests
+function noUncommitted(orc, cb) {
+  orc.repo.status(function(err, status) {
+    if(err) {
+      cb('error getting status checking unstaged '+err);
+      return;
+    }
+    if(status.untracked.length > 0) {
+      cb('untracked files, add or ignore before running this.');
+      return;
+    }
+    cb(null, true);
+  });
 }
 
-function pull(orc) {
+function repoIsClean(orc, cb) {
+  noUnstaged(orc, function(err, res) {
+    if (err) {
+      cb(err);
+      return;
+    }
+    noUncommitted(orc, function(err, res) {
+      if(err) {
+        cb(err);
+        return;
+      }
+      cb(null, true);
+    });
+  });
+}
+
+// commit local changes
+// push to remote
+function checkpoint(orc, cb) {
+  orc.repo.status(function(err, res) {
+    if(err) {
+      cb('error getting status'+err);
+      return;
+    }
+    orc.repo.commit('ORC-CHECKPOINT', function(err, res) {
+      if(err) {
+        cb('checkpoint commit failed '+res);
+        return;
+      }
+      orc.repo.push('origin', 'master', function(err, result) {
+        if (err) {
+          cb('error pushing checkpoint: '+JSON.stringify(err));
+          return;
+        }
+        cb(null, true);
+      });
+    });
+  });
+}
+
+function pull(orc, cb) {
   // TODO
 }
 
-function push(orc) {
+function push(orc, cb) {
   // TODO
 }
 
-function createBranch(orc, branchName) {
-  _requireCommit();
-  orc.repo.checkoutSync('master');
-  orc.repo.pullSync();
+function createBranch(orc, branchName, cb) {
+  repoIsClean(orc, function(err, res) {
+    if(err) {
+      cb(err);
+      return;
+    }
+    orc.repo.checkout('master', function(err, res) {
+      if(err) {
+        cb('failed to checkout master'+err);
+        return;
+      }
+      orc.repo.pull('origin','master', function(err, res) {
+        if (err) {
+          cb('failed to pull from master: '+JSON.stringify(err));
+          return;
+        }
+        orc.repo.createBranch(branchName, function(err, res) {
+          if(err) {
+            cb('failed to create branch '+branchName);
+            return;
+          }
+          orc.repo.checkout(branchName, function(err, res) {
+            if(err) {
+              cb('couldn\'t checkout branch '+branchName);
+              return;
+            }
+            orc.repo.push('origin', branchName, ['--set-upstream'], cb);
+          });
+        });
+      });
+    });
+  });
 }
 
-function status(orc) {
-  // TODO: incomplete, just an example
+function status(orc,cb) {
+  // TODO: remove, just an example
   /* 
   { staged: 
    [ { file: '../package.json',
@@ -60,22 +147,39 @@ function status(orc) {
        status: 'modified' } ],
   untracked: [ 'orc-test.js' ] }
   */
-  orc.repo.status(function(err, stats){
-    console.log('stats: '+JSON.stringify(stats));
+  orc.repo.status(cb);
+}
+
+function main(dir, argv, cb) {
+  if(!cb) {
+    cb = function(err, res) {
+      if(err) {
+        console.err('error: '+JSON.stringify(err));
+      } else {
+        // TODO: standardize result text and output
+        console.log('done. '+res);
+      }
+    };
+  }
+
+  init(dir, function(err, orc) {
+    if(err) {
+      cb('failed to init orc: '+err);
+      return;
+    }
+
+    var app = new commander.Command();
+    app.command('checkpoint').alias('cp').description('commit all local changes and push to repo. use this all the time!')
+      .action(function() { checkpoint(orc, cb); });
+    app.command('pull').description('pull latest from remote master into your current branch')
+      .action(function() {pull(orc, cb); });
+    app.command('push').description("use this when you're ready to submit a pull request on github: squash your branch down to one commit, run unit tests, and push.")
+      .action(function() {push(orc, cb);});
+    app.command('branch [name]').alias('br').description('helper for creating branches')
+      .action(function(branchName) { createBranch(orc, branchName, cb); });
+    app.command('status').alias('st').description('helper for getting status').action(function() { status(orc, cb);}); // REMOVE
+    app.parse(argv);
   });
 }
 
-exports.main = function(dir, argv) {
-  var orc = _setup(dir);
-  if(!orc) {
-    return false;
-  }
-  app.command('checkpoint').alias('cp').description('commit all local changes and push to repo. use this all the time!').action(function() { checkpoint(orc); });
-  app.command('pull').description('pull latest from remote master into your current branch').action(function() {pull(orc); });
-  app.command('push').description("use this when you're ready to submit a pull request on github: squash your branch down to one commit, run unit tests, and push.").action(function() {push(orc);});
-  app.command('branch [name]').alias('br').description('helper for creating branches').action(function(branchName) { createBranch(orc, branch_name); });
-  app.command('status').alias('st').description('helper for getting status').action(function() { status(orc);}); // REMOVE
-  app.parse(argv);
-  console.log('main! '+JSON.stringify(argv)); 
-  return true;
-};
+exports.main = main;

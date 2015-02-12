@@ -27,11 +27,11 @@ function init(dir, cb) {
 function noUnstaged(orc, cb) {
   orc.repo.status(function(err, status) {
     if(err) {
-      cb('error getting status checking unstaged '+err);
+      cb({message: 'error getting status checking unstaged '+err});
       return;
     }
     if(status.unstaged.length > 0) {
-      cb('unstaged files, commit before running this.');
+      cb({message: 'unstaged files, commit before running this.'});
       return;
     }
     cb(null, true);
@@ -41,11 +41,11 @@ function noUnstaged(orc, cb) {
 function noUntracked(orc, cb) {
   orc.repo.status(function(err, status) {
     if(err) {
-      cb('error getting status checking unstaged '+err);
+      cb({message: 'error getting status checking unstaged '+err});
       return;
     }
     if(status.untracked.length > 0) {
-      cb('untracked files, add or ignore before running this.');
+      cb({message: 'untracked files, add or ignore before running this.'});
       return;
     }
     cb(null, true);
@@ -71,15 +71,32 @@ function repoIsClean(orc, cb) {
 function repoHasChanges(orc, cb) {
   orc.repo.status(function(err, status) {
     if(err) {
-      cb('error getting status checking unstaged '+err);
+      cb({message:'error getting status checking unstaged '+err});
       return;
     }
     if(status.staged.length === 0 && status.unstaged.length === 0) {
-      cb('no changes, aborting.');
+      cb({message: 'no changes, aborting.'});
       return;
     }
     cb(null, true);
   });  
+}
+
+// get master up to date
+function pullMaster(orc, cb) {
+  repoIsClean(orc, function(err, res) {
+    if(err) {
+      cb(err);
+      return;
+    }
+    orc.repo.checkout('master', function(err, res) {
+      if(err) {
+        cb({message: 'failed to checkout master'+err.message});
+        return;
+      }
+      orc.repo.pull('origin','master', cb);
+    });
+  });
 }
 
 // commit local changes
@@ -87,7 +104,7 @@ function repoHasChanges(orc, cb) {
 function checkpoint(orc, cb) {
   noUntracked(orc, function(err, res) {
     if(err) {
-      cb('you have unstaged files: '+err);
+      cb({message: 'you have unstaged files: '+err});
       return;
     }
     repoHasChanges(orc, function(err, res) {
@@ -97,17 +114,17 @@ function checkpoint(orc, cb) {
       }
       orc.repo.commit('ORC-CHECKPOINT', ['-a', '--no-verify'], function(err, res) {
         if(err) {
-          cb('checkpoint commit failed: \n'+err.message);
+          cb({message: 'checkpoint commit failed: \n'+err.message});
           return;
         }
         orc.repo.getBranches(function(err, branches) {
           if(err) {
-            cb('error getting branches: '+err.message);
+            cb({message: 'error getting branches: '+err.message});
             return;
           }
           orc.repo.push('origin', branches.current, function(err, result) {
             if (err) {
-              cb('error pushing checkpoint: '+err.message);
+              cb({message: 'error pushing checkpoint: '+err.message});
               return;
             }
             cb(null, 'checkpoint finished.');
@@ -127,34 +144,22 @@ function push(orc, cb) {
 }
 
 function createBranch(orc, branchName, cb) {
-  repoIsClean(orc, function(err, res) {
+  pullMaster(orc, function(err) {
     if(err) {
-      cb(err);
+      cb(err.message);
       return;
     }
-    orc.repo.checkout('master', function(err, res) {
+    orc.repo.createBranch(branchName, function(err, res) {
       if(err) {
-        cb('failed to checkout master'+err.message);
+        cb('failed to create branch '+branchName+': '+err.message);
         return;
       }
-      orc.repo.pull('origin','master', function(err, res) {
-        if (err) {
-          cb('failed to pull from master: '+err.message);
+      orc.repo.checkout(branchName, function(err, res) {
+        if(err) {
+          cb('couldn\'t checkout branch '+branchName+': '+err.message);
           return;
         }
-        orc.repo.createBranch(branchName, function(err, res) {
-          if(err) {
-            cb('failed to create branch '+branchName+': '+err.message);
-            return;
-          }
-          orc.repo.checkout(branchName, function(err, res) {
-            if(err) {
-              cb('couldn\'t checkout branch '+branchName+': '+err.message);
-              return;
-            }
-            orc.repo.push('origin', branchName, ['--set-upstream'], cb);
-          });
-        });
+        orc.repo.push('origin', branchName, ['--set-upstream'], cb);
       });
     });
   });

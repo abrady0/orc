@@ -104,7 +104,7 @@ function pullMaster(orc, cb) {
 function checkpoint(orc, message, cb) {
   noUntracked(orc, function(err, res) {
     if(err) {
-      cb({message: 'you have unstaged files: '+err.message});
+      cb(err);
       return;
     }
     repoHasChanges(orc, function(err, res) {
@@ -122,9 +122,9 @@ function checkpoint(orc, message, cb) {
             cb({message: 'error getting branches: '+err.message});
             return;
           }
-          orc.repo.push('origin', branches.current, function(err, result) {
+          orc.repo.push('origin', branches.current, ['--no-verify'], function(err, result) {
             if (err) {
-              cb({message: 'error pushing checkpoint: '+err.message});
+              cb({message: 'error pushing checkpoint: '+JSON.stringify(err)});
               return;
             }
             cb(null, 'checkpoint finished.');
@@ -185,7 +185,7 @@ function main(dir, argv, cb) {
   if(!cb) {
     cb = function(err, res) {
       if(err) {
-        console.log('error: '+err);
+        console.log('error: '+err.message);
       } else {
         // TODO: standardize result text and output
         console.log('done. '+res);

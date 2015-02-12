@@ -81,12 +81,18 @@ function checkpoint(orc, cb) {
         cb('checkpoint commit failed: \n'+err.message);
         return;
       }
-      orc.repo.push('origin', 'master', function(err, result) {
-        if (err) {
-          cb('error pushing checkpoint: '+JSON.stringify(err));
+      orc.repo.getBranches(function(err, branches) {
+        if(err) {
+          cb('error getting branches: '+err.message);
           return;
         }
-        cb(null, true);
+        orc.repo.push('origin', branches.current, function(err, result) {
+          if (err) {
+            cb('error pushing checkpoint: '+err.message);
+            return;
+          }
+          cb(null, true);
+        });
       });
     });
   });

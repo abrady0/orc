@@ -102,9 +102,9 @@ function pullMaster(orc, cb) {
 // commit local changes
 // push to remote
 function checkpoint(orc, message, cb) {
-  noUntracked(orc, function(err, message, res) {
+  noUntracked(orc, function(err, res) {
     if(err) {
-      cb({message: 'you have unstaged files: '+err});
+      cb({message: 'you have unstaged files: '+err.message});
       return;
     }
     repoHasChanges(orc, function(err, res) {
@@ -112,7 +112,6 @@ function checkpoint(orc, message, cb) {
         cb(err);
         return;
       }
-      var message = 'ORC-CHECKPOINT '+(message || '');
       orc.repo.commit(message, ['-a', '--no-verify'], function(err, res) {
         if(err) {
           cb({message: 'checkpoint commit failed: \n'+err.message});

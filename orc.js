@@ -91,7 +91,7 @@ function checkpoint(orc, cb) {
             cb('error pushing checkpoint: '+err.message);
             return;
           }
-          cb(null, true);
+          cb(null, 'checkpoint finished.');
         });
       });
     });

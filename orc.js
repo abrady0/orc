@@ -112,7 +112,7 @@ function checkpoint(orc, message, cb) {
         cb(err);
         return;
       }
-      orc.repo.commit(message, ['-a', '--no-verify'], function(err, res) {
+      orc.repo.commit('ORC-CHECKPOINT'+(message?(': '+message):''), ['-a', '--no-verify'], function(err, res) {
         if(err) {
           cb({message: 'checkpoint commit failed: \n'+err.message});
           return;

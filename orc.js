@@ -118,7 +118,7 @@ function createBranch(orc, branchName, cb) {
         }
         orc.repo.createBranch(branchName, function(err, res) {
           if(err) {
-            cb('failed to create branch '+branchName)+': '+err.message;
+            cb('failed to create branch '+branchName+': '+err.message);
             return;
           }
           orc.repo.checkout(branchName, function(err, res) {

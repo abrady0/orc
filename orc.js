@@ -90,22 +90,28 @@ function checkpoint(orc, cb) {
       cb('you have unstaged files: '+err);
       return;
     }
-    orc.repo.commit('ORC-CHECKPOINT', ['-a', '--no-verify'], function(err, res) {
+    repoHasChanges(orc, function(err, res) {
       if(err) {
-        cb('checkpoint commit failed: \n'+err.message);
+        cb(err);
         return;
       }
-      orc.repo.getBranches(function(err, branches) {
+      orc.repo.commit('ORC-CHECKPOINT', ['-a', '--no-verify'], function(err, res) {
         if(err) {
-          cb('error getting branches: '+err.message);
+          cb('checkpoint commit failed: \n'+err.message);
           return;
         }
-        orc.repo.push('origin', branches.current, function(err, result) {
-          if (err) {
-            cb('error pushing checkpoint: '+err.message);
+        orc.repo.getBranches(function(err, branches) {
+          if(err) {
+            cb('error getting branches: '+err.message);
             return;
           }
-          cb(null, 'checkpoint finished.');
+          orc.repo.push('origin', branches.current, function(err, result) {
+            if (err) {
+              cb('error pushing checkpoint: '+err.message);
+              return;
+            }
+            cb(null, 'checkpoint finished.');
+          });
         });
       });
     });

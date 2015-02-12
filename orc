@@ -1,3 +1,3 @@
 #! /usr/bin/env node
 var orc = require('./orc.js');
-orc.main();
+orc.main(process.cwd(), process.argv);

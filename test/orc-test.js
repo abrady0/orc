@@ -115,7 +115,7 @@ describe('remote tests', function() {
       expect(res).to.be.undefined();
     });
   });
-  it('should fail to create a branch', function() {};
+  //it('should fail to create a branch', function() {};
   // createBranch test: success and failure
 });
 /*

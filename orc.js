@@ -101,7 +101,7 @@ function pullMaster(orc, cb) {
 
 // commit local changes
 // push to remote
-function checkpoint(orc, cb) {
+function checkpoint(orc, message, cb) {
   noUntracked(orc, function(err, message, res) {
     if(err) {
       cb({message: 'you have unstaged files: '+err});

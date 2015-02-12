@@ -68,6 +68,20 @@ function repoIsClean(orc, cb) {
   });
 }
 
+function repoHasChanges(orc, cb) {
+  orc.repo.status(function(err, status) {
+    if(err) {
+      cb('error getting status checking unstaged '+err);
+      return;
+    }
+    if(status.staged.length === 0 && status.unstaged.length === 0) {
+      cb('no changes, aborting.');
+      return;
+    }
+    cb(null, true);
+  });  
+}
+
 // commit local changes
 // push to remote
 function checkpoint(orc, cb) {

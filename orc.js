@@ -102,7 +102,7 @@ function pullMaster(orc, cb) {
 // commit local changes
 // push to remote
 function checkpoint(orc, cb) {
-  noUntracked(orc, function(err, res) {
+  noUntracked(orc, function(err, message, res) {
     if(err) {
       cb({message: 'you have unstaged files: '+err});
       return;
@@ -112,7 +112,8 @@ function checkpoint(orc, cb) {
         cb(err);
         return;
       }
-      orc.repo.commit('ORC-CHECKPOINT', ['-a', '--no-verify'], function(err, res) {
+      var message = 'ORC-CHECKPOINT '+(message || '');
+      orc.repo.commit(message, ['-a', '--no-verify'], function(err, res) {
         if(err) {
           cb({message: 'checkpoint commit failed: \n'+err.message});
           return;
@@ -200,8 +201,8 @@ function main(dir, argv, cb) {
     }
 
     var app = new commander.Command();
-    app.command('checkpoint').alias('cp').description('commit all local changes and push to repo. use this all the time!')
-      .action(function() { checkpoint(orc, cb); });
+    app.command('checkpoint [message]').alias('cp').description('commit all local changes and push to repo. use this all the time!')
+      .action(function(message) { checkpoint(orc, message, cb); });
     app.command('pull').description('pull latest from remote master into your current branch')
       .action(function() {pull(orc, cb); });
     app.command('push').description("use this when you're ready to submit a pull request on github: squash your branch down to one commit, run unit tests, and push.")

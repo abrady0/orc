@@ -1,3 +1,4 @@
+// http://www.bennadel.com/blog/2329-building-executable-scripts-for-the-mac-osx-command-line-with-node-js.htm - read this!
 var commander = require('commander');
 var git = require('gitty');
 var path = require('path');
@@ -21,6 +22,26 @@ function init(dir, cb) {
       return;
     }
     cb(null, { repo_dir: dir, repo: git(dir)});
+  });
+}
+
+/**
+* infer a username from the email registered with git config.
+*/ 
+function getUsername(cb) {
+  git.config('user.email', function(err, email) {
+    var split = email ? email.split('@') : [];
+    if (split.length < 2) {
+      cb('couldn\'t split git email'); // no name found
+      return;
+    }
+    var userName = split[0];
+    reg = /^[\w]+$/;
+    if (!reg.test(userName)) {
+      cb('name not all word constituents');
+      return;
+    }
+    cb(null, userName);
   });
 }
 
@@ -83,7 +104,8 @@ function repoHasChanges(orc, cb) {
 }
 
 // get master up to date
-function pullMaster(orc, cb) {
+// NOTE: current branch becomes master
+function checkoutAndPullMaster(orc, cb) {
   repoIsClean(orc, function(err, res) {
     if(err) {
       cb(err);
@@ -136,7 +158,9 @@ function checkpoint(orc, message, cb) {
 }
 
 function pull(orc, cb) {
-  // TODO
+  checkoutAndPullMaster(orc, function(err) {
+
+  });
 }
 
 function push(orc, cb) {
@@ -144,22 +168,29 @@ function push(orc, cb) {
 }
 
 function createBranch(orc, branchName, cb) {
-  pullMaster(orc, function(err) {
+  checkoutAndPullMaster(orc, function(err) {
     if(err) {
-      cb(err.message);
+      cb(err);
       return;
     }
-    orc.repo.createBranch(branchName, function(err, res) {
-      if(err) {
-        cb('failed to create branch '+branchName+': '+err.message);
-        return;
+    getUsername(function(err, userName) {
+      if (err) {
+        console.log('error getting username: '+err);
+        userName = '';
       }
-      orc.repo.checkout(branchName, function(err, res) {
+      branchName = userName+'-'+branchName;
+      orc.repo.createBranch(branchName, function(err, res) {
         if(err) {
-          cb('couldn\'t checkout branch '+branchName+': '+err.message);
+          cb('failed to create branch '+branchName+': '+err.message);
           return;
         }
-        orc.repo.push('origin', branchName, ['--set-upstream'], cb);
+        orc.repo.checkout(branchName, function(err, res) {
+          if(err) {
+            cb('couldn\'t checkout branch '+branchName+': '+err.message);
+            return;
+          }
+          orc.repo.push('origin', branchName, ['--set-upstream'], cb);
+        });
       });
     });
   });
